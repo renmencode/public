@@ -1,4 +1,4 @@
-# Capstone-2: Banking Customer Support AI Agent using Multi-Agent Architecture.<br>
+# Banking Customer Support AI Agent using Multi-Agent Architecture.<br>
 # 
 # Problem scenario:<br>
 # 
