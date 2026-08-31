@@ -48,9 +48,13 @@ class RunEventChatClient:
     
             prompt = st.chat_input("Your Message")
             if (prompt is not None):
-                chat_resp = self.post_message(prompt)
-                st.session_state.messages.append(chat_resp)
-                st.write(st.session_state.messages)
+                st.session_state.messages.append(prompt)        # Append ChatRequest to Session.
+                st.write(st.session_state.messages)             # Write the Session to UI
+
+                chat_resp = self.post_message(prompt)           # Post the Message to Server
+
+                st.session_state.messages.append(chat_resp)     # Append ChatResponse to Session.
+                st.write(st.session_state.messages)             # Write the Session to UI
 
         except Exception as exp:
             error = f"Error inside RunEventChatClient.post_message - {exp}"
