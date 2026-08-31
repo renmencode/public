@@ -19,11 +19,21 @@ load_dotenv()
 
 # User Schema
 class UserInfo(TypedDict):
+    registerId: int | None
     first_name: str
     last_name: str
     user_age: int
     user_email: str
     user_phone: str
+
+class UserLookup(TypedDict):
+    user_info: UserInfo | None
+    error_message: str | None
+
+class UserLookupList(TypedDict):
+    user_info: list[UserInfo] | None
+    error_message: str | None
+
 
 # User Register Tool
 class RunEventUserRegistration:
@@ -129,14 +139,14 @@ class RunEventUserRegistration:
 
 
     # Lookup Registered User for the Event.
-    def lookup_registered_user(self, regId: int) -> str:
+    def lookup_registered_user(self, regId: int) -> UserLookup:
         """ This Tool is used to Lookup a specific Registered User for the Running Event.
 
         Args:
-            regId: RegisterationID of the User, that is used to do the lookup in the database. 
+            regId: RegistrationID of the User, that is used to do the lookup in the database. 
 
         Returns:
-            response: Information pertaining to Registered Users in the format - {first_name, last_name, age, email, phone_number}
+            response: Information pertaining to a specific Registered User.
 
         """
         
@@ -145,25 +155,32 @@ class RunEventUserRegistration:
         try:
             sql_conn = self.db_manager.get_sqllite_conn()
             cursor = sql_conn.cursor()
-            cursor.execute("SELECT first_name, last_name, age, email, phone_number FROM user_registeration WHERE reg_id = ?",
+            cursor.execute("SELECT reg_id, first_name, last_name, age, email, phone_number FROM user_registeration WHERE reg_id = ?",
                           (regId,)
                         )
 
             record = cursor.fetchall()
-            if (record == None):
-                response = f"No User found with this RegisterationID - {regId}."
-            else:
-                record_list = [row for row in record]
-                user_info = {
-                    "first_name": record_list[0][0],
-                    "last_name": record_list[0][1],
-                    "age": record_list[0][2],
-                    "email": record_list[0][3],
-                    "phone_number": record_list[0][4]
+            if ((record == None) or (record == [])):
+                response = {
+                    "registerId": None,
+                    "user_info": None,
+                    "error_message": f"No User found with this RegisterationID - {regId}."
                 }
-                response = f"Registered User - {user_info}"
-
-            print(response, flush=True)
+            else:
+                row = record[0]
+                row_rec = {
+                    "registerId": row[0],
+                    "first_name": row[1],
+                    "last_name": row[2],
+                    "user_age": row[3],
+                    "user_email": row[4],
+                    "user_phone": row[5] 
+                }
+                
+                response = {
+                    "user_info": row_rec,
+                    "error_message": None
+                }
 
             return(response)
 
@@ -177,11 +194,11 @@ class RunEventUserRegistration:
 
 
     # List of Users Registered for the Event.
-    def list_registered_users(self) -> str:
+    def list_registered_users(self) -> UserLookupList:
         """ This Tool is used to Lookup list of Users for the Running Event. 
 
         Returns:
-            response: List of Registered Users.
+            response: List of Registered Users
 
         """
         
@@ -193,13 +210,29 @@ class RunEventUserRegistration:
             cursor.execute("SELECT * FROM user_registeration")
 
             record = cursor.fetchall()
-            if (record == None):
-                response = f"No Users have been Registered."
+            if ((record == None) or (record == [])):
+                response = {
+                    "user_info": None,
+                    "error_message": "No Users have been Registered."
+                }
             else:
-                record_list = [row for row in record]
-                response = f"List of Registered Users - {record_list}"
+                record_list = []
+                for row in record:
+                    row_rec = None
+                    row_rec = {
+                        "registerId": row[0],
+                        "first_name": row[1],
+                        "last_name": row[2],
+                        "user_age": row[3],
+                        "user_email": row[4],
+                        "user_phone": row[5] 
+                    }
+                    record_list.append(row_rec)
 
-            print(response, flush=True)
+                response = {
+                    "user_info": record_list,
+                    "error_message": None
+                }
 
             return(response)
 
