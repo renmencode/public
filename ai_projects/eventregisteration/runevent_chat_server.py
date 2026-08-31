@@ -17,6 +17,9 @@ from fastapi import FastAPI
 # Pydantic BaseModel class
 from pydantic import BaseModel
 
+# Import LangSmith for Tracing
+from langsmith import traceable
+
 # Custom Classes
 from runevent_registration_agent import ChatAgent
 
@@ -25,6 +28,11 @@ load_dotenv()
 
 # Retrieve Global Values
 chat_uri = os.getenv("runevent_chat_server.post.chat_uri")
+
+# Init Langsmith Tracing
+os.environ["LANGSMITH_TRACING"] = "true"
+os.environ["LANGSMITH_API_KEY"] = os.getenv("LANGSMITH_API_KEY")
+os.environ["LANGSMITH_PROJECT"] = os.getenv("runevent_monitor_app")
 
 
 # Chat Request Class
@@ -39,11 +47,13 @@ class ChatResponse(BaseModel):
 class ChatBotServer:
 
     def __init__(self):
+        self.is_initialized = None
         self.chat_agent = ChatAgent()
         self.server_host = os.getenv("runevent_chat_server.host")
         self.server_port = int(os.getenv("runevent_chat_server.port"))
 
     # Implement 'chat' interface
+    @traceable(name="runevent_chat")
     async def chat(self, chat_req: ChatRequest) -> ChatResponse:
         print("User Request - ", chat_req.message)
 
@@ -53,17 +63,23 @@ class ChatBotServer:
             "message": chat_resp
         })
 
+    # Implement 'Init' interface
+    @traceable(name="runevent_init")
+    async def initialize(self):
+        self.is_initialized = await self.chat_agent.initialize()      # Init Chat Agent
+
+
     # Star the ChatBot Server
     async def main(self) -> bool:
         try:
             uvi_config = None
             uvi_server = None
 
-            is_initialized = await self.chat_agent.initialize()      # Init Chat Agent
+            await self.initialize()
 
             # Start ChatBot Server
             # UVI Server Runs Synchronously by default.
-            if (is_initialized == True):
+            if (self.is_initialized == True):
                 uvi_config = uvicorn.Config(
                     app,
                     host=self.server_host,
@@ -71,9 +87,7 @@ class ChatBotServer:
                 )
                 uvi_server = uvicorn.Server(uvi_config)
                 await uvi_server.serve()
-
                 return(True)
-
             else:
                 raise Exception("Chat Agent Initiaization Failed.")
 

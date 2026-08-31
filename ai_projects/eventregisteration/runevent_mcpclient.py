@@ -14,6 +14,11 @@ from langchain_mcp_adapters.client import MultiServerMCPClient
 # Load Env Variables
 load_dotenv()
 
+# Init Langsmith Tracing
+os.environ["LANGSMITH_TRACING"] = "true"
+os.environ["LANGSMITH_API_KEY"] = os.getenv("LANGSMITH_API_KEY")
+os.environ["LANGSMITH_PROJECT"] = os.getenv("runevent_monitor_app")
+
 
 # Local MCP Client
 class MCPClient:

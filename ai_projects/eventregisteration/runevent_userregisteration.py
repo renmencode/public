@@ -1,4 +1,30 @@
-# User Registration Agent which is a Lang Graph with Tools.
+# Notes:
+# User Registration Sub-Agent. This is invoked from Run Event Agent.
+#
+# Functionality:
+# 1. Agent Technology - LangGraph
+# 2. LLM Used - OpenAI GPT4.1
+# 3. Input : Exact Prompt that User input. 
+# 4. Output: Rgistration Success or Failuer Message with Registration ID.
+# 5. Tools: Publised as MCP Services.
+# 6. Point of Entry - 'initialize' and then 'register'.
+# 7. System Instruction: runningevent_agent_instructions.json #user_registeration.
+#
+# Proces Flow:
+# 1. LLM Node is the prmary Entry point of the Graph
+# 2. Process Node are mix of Custom Nodes and Tool Nodes.
+# 3. ToolNodes Execution is via UserRegisterationTools.tool_executor
+# 4. The above approach help to manipulate the ToolCall & Graph State, before and after Tool Execution.
+# 5. At End of Graph Execution, the Context is shrunk to Initialization State, to manage Token Cost and Context Overrun.
+# 6. Registration pocess is setup as a 'Routing Slip' pattersn where the Task or Steps are provided as JIT Context.
+# 7. Each step of the Route / Turn is provided in this file - user_registeration_task_context.csv
+# 8. The file gets loaded as part of the initialization of the this Program / Module. 
+# 9. They have four columns - Task Name, Tool Name, Request Context, Response Context.
+# 10. For each turn, system reads task, context and execute then in teh provided order. 
+# 11. Incase of Execption the flow is cut short and appropriate Error is sent to Agent layer.
+# 12. Incae of Success, appropriate messsage is formatted and sent to Agent Layer. 
+# 13. At end of execution Context is clean-up and kept ready for the next request from Agent.  
+
 
 # Class Late Binding Annotaion
 from __future__ import annotations 
@@ -13,7 +39,6 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from typing_extensions import Annotated, TypedDict, Literal
 
-
 # Import Pandas
 import pandas as pd
 
@@ -26,6 +51,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.tools import StructuredTool
 from langgraph.prebuilt import InjectedState
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage, AnyMessage, RemoveMessage
+from langsmith import traceable
 
 # Import Langchain AI Models
 from langchain_openai import ChatOpenAI
@@ -39,9 +65,14 @@ userreg_task_ctx_file = "C:\\RanjithC\\AIProjects\\PromptEngg\\langgraph\\data\\
 # Load Env Variables
 load_dotenv()
 
+# Init Langsmith Tracing
+os.environ["LANGSMITH_TRACING"] = "true"
+os.environ["LANGSMITH_API_KEY"] = os.getenv("LANGSMITH_API_KEY")
+os.environ["LANGSMITH_PROJECT"] = os.getenv("runevent_monitor_app")
+
 
 # User Info
-class UserInfo(TypedDict):
+class UserInfo(BaseModel):
     first_name: str
     last_name: str
     user_age: int
@@ -49,16 +80,15 @@ class UserInfo(TypedDict):
     user_phone: int
 
 # LangGraph State
-class State(TypedDict):
+class State(BaseModel):
     messages: Annotated[list[AnyMessage], add_messages]            
-    out_messages: Annotated[list[AnyMessage], add_messages]        # Pruned "out_messages" gets collected for every Graph Run
+    out_messages: Annotated[list[AnyMessage], add_messages] = Field(default_factory=list)       # Pruned "out_messages" gets collected for every Graph Run
 
+# Input Basemodel is created as a wrapper for all Tool Func Input Args. 
+# Vars in the BaseModel will be specificed as Args in Tool Func.
+# If any Var is a Dict, that need to defined inside this wrapper BaseModel.
 class UserRegRunInput(BaseModel):
-    user_prompt: str = Field(description="User Prompt")
-
-# Output Message Dict
-#class OutputState(TypedDict):
-#    out_messages: list[AnyMessage]
+    user_prompt: str = Field(description="User Prompt", default_factory=str)
 
 
 # Agent LLM Class
@@ -94,7 +124,7 @@ class UserRegisterationLLM:
     def chat_llm_node(self, state: State):
         try:
 
-            ai_message = self.op_user_register_llm_tools.invoke(state["messages"])
+            ai_message = self.op_user_register_llm_tools.invoke(state.messages)
             return({"messages": [self.prefix_ai_to_content(ai_message)]})   # Prepend AI to Content Value.
         
         except Exception as exp:
@@ -147,8 +177,8 @@ class UserRegisterationGraph:
     # Override langgraph default 'tools_condition'
     def tools_condition(self, state: State) -> Literal["user_tools", "end_graph"]:
         try:
-            # print("\nBBB: ", state["messages"][-1])
-            msg =  state["messages"][-1]   
+            # print("\nBBB: ", state.messages[-1])
+            msg =  state.messages[-1]   
             if (isinstance(msg, AIMessage)) and (msg.additional_kwargs.get("tool_calls") is not None):
                 tool_call = msg.additional_kwargs.get("tool_calls")         # Get "tool_calls" Structure
                 func_name = tool_call[0].get("function").get("name")        # Get Function Name from tool_calls Struct
@@ -202,10 +232,10 @@ class UserRegisterationGraph:
     def prune_graph_output(self, state: State) -> dict:
         try:
             # Filter & Collect Good Messages - Sys, HM, AI (without ToolCall)
-            valid_msg = list(filter(self.filter_valid_message, state["messages"]))
+            valid_msg = list(filter(self.filter_valid_message, state.messages))
 
             # Filter & Collect Invalid Messages - ToolMessage, AI (tool call)
-            invalid_msg = list(filter(self.filter_invalid_message, state["messages"]))
+            invalid_msg = list(filter(self.filter_invalid_message, state.messages))
 
             # Setting Remove Pointer in State Obj
             remove_msg = []
@@ -236,9 +266,9 @@ class UserRegisterationGraph:
     def cleanup_graph_state(self):
         try:
 
-            snapshots = self.graph.get_state(self.graph_config)
-            state_obj = snapshots.values
-
+            snapshots = self.graph.get_state(self.graph_config)   
+            state_obj = snapshots.values        # .values Return a Python 'Dict' and Not Pydantic.
+ 
             remove_msg = []
             for state_msg in state_obj["messages"][3:]:
                 remove_msg.append(RemoveMessage(id=state_msg.id))
@@ -330,7 +360,7 @@ class UserRegisterationTools:
         func_args = None
 
         try:
-            tool_message = state["messages"][-1]
+            tool_message = state.messages[-1]
             tool_calls = tool_message.additional_kwargs.get("tool_calls")        # Get "tool_calls" Structure
 
             tool_call_id = tool_calls[0].get("id")                               # Get Tool Call ID
@@ -419,8 +449,8 @@ class UserRegisteration:
         self.userreg_agent_tools = UserRegisterationTools(self.mcp_client, self.userreg_agent_utils)
         self.userreg_agent_graph = UserRegisterationGraph()
 
-
     # Initialise Agent Graph
+    @traceable
     async def initialize(self, userreg_instruction: str) -> bool:
         try:
             self.userreg_agent_graph.set_graph_config()                      # Initialise Agent Thread
@@ -454,13 +484,11 @@ class UserRegisteration:
     async def isInitialized(self):
         return(self.initialized_status)
 
-    # Get Formated Data Struct for EntryPoint 'run' function
+    # Get Formated Data Struct for EntryPoint 'register' function
     # To Enable it as a Tool Call option in Client App LLMs
-    async def get_tool_spec(self, func_name: str) -> dict:
+    async def get_register_tool_spec(self, func_name: str) -> dict:
         try:
-
-            if (func_name == 'run'):
-                
+            if (func_name == 'register'):
                 description = """ Tool provides ability to Register User Information. 
                                 
                             Args:
@@ -473,7 +501,7 @@ class UserRegisteration:
                             """
 
                 tool_spec = {
-                    "name": "run",
+                    "name": "register",
                     "description": description,
                     "args_schema": UserRegRunInput
                 }
@@ -485,11 +513,11 @@ class UserRegisteration:
             print(error, flush=True)
             raise Exception(error)
 
-
-    # EntryPoint for Triggering Sub-Agent
-    async def run(self, user_prompt) -> str:
+    # EntryPoint for Registeration Service / Agent
+    @traceable
+    async def register(self, user_prompt: str) -> str:
         try:
-            #print("\nInside RUN Func: ", user_prompt)
+            print("\nInside User Register: ", user_prompt, flush=True)
 
             final_resp_content = None                   # Final AI Response Content for each Route Turn.
 
