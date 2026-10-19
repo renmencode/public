@@ -1,4 +1,4 @@
-# This is MCP Client
+# MCP Client
 
 # Class Late Binding Annotaion
 from __future__ import annotations 
