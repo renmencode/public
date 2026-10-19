@@ -1,4 +1,4 @@
-# EC2 Deployment Sub-Agent for AWS Infra.
+# Artifact Deployment Sub-Agent for AWS Infra.
 
 # Class Late Binding Annotaion
 from __future__ import annotations 
