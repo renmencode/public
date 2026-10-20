@@ -1,5 +1,13 @@
 # Primary Agent Middleware.
 
+# This Middleware is used to manipulate DeepAgent Tool Calls Events.
+# Though File Operation are inherent to Deep Agents, that is 
+#   circumvented with instructions to skip. 
+# This is mainly done to prevent unintended read of Files.
+# We also manipulate the 'Intent' Call Tool Response with Instructions
+#   directing the LLM to respond with follow-up actions.
+
+
 # Class Late Binding Annotaion
 from __future__ import annotations 
 

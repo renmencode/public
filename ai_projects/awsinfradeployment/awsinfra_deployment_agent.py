@@ -1,5 +1,21 @@
 # Primary Agent for AWS Infra Deloyment.
 
+# This is the Orchestrator Deep Agent
+# A SubAgent associated with this DeepAgent that does -
+#   - Lookup of a Launch Template.
+#   - Associates the Input provided by User to Launch Template
+#   - Runs the CloudFormation Stack to Deploy the Artifact.
+# Entire SubAgent is defiend in the configuration file that gets
+#   instantiated at teh start of Deep Agent. 
+# The Deep Agent is also does Intent Checks on user conversation.
+# Only if the conversation is aout deployment of AWS Artifact Agent 
+#   routes the conversation to SubAgent.
+# The Agent interacts with the outside world using 
+#   - MCP tools for connecting to AWS CFT Infra
+#   - StreamlitUI & Chatbot to interact with User.
+#   - Also does HTIL interrupts to get Confirmation and Specific
+#       inputs from user.
+
 # Class Late Binding Annotaion
 from __future__ import annotations 
 

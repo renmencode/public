@@ -1,5 +1,14 @@
 # Sub-Agent Middleware.
 
+# This Middleware is used to manipulate SubAgent Tool Calls Events.
+# Though File Operation are inherent to SubAgent, that is 
+#   prevented with instructions to skip unintended file calls. 
+# This Middleware also implements HTIL where on 'deploy_template'
+#   HTIL is triggered to accept StackName for the dpeloyemnt.
+# Rest of the Tool Calls that goes thruthe Middleware are 
+#    - artifact_read_template, Update_template, deploy_tempate. 
+
+
 # Class Late Binding Annotaion
 from __future__ import annotations 
 
